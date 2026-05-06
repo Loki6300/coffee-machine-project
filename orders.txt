@@ -1,0 +1,2 @@
+[2026-05-06 16:10:41]  |  Latte           |  Cost: Rs.50.00    |  Paid: Rs.50.00    |  Change: Rs.0.00
+[2026-05-06 16:10:41]  |  Black coffee    |  Cost: Rs.25.00    |  Paid: Rs.25.00    |  Change: Rs.0.00

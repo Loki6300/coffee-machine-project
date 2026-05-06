@@ -1,208 +1,281 @@
 # -*- coding: utf-8 -*-
-# ============================================================
-#         ***  COFFEE MACHINE PROJECT  ***
-#         Built using Object-Oriented Programming (OOP)
-#         Language: Python 3
-# ============================================================
+# ================================================================
+#          ***  COFFEE MACHINE PRO  ***
+#          Python OOP Project  |  Version 2.0
+#          Language: Python 3
+# ================================================================
+#
+# NEW IN VERSION 2.0:
+#   - 3 new drinks: Mocha, Black Coffee, Cold Coffee
+#   - Refill command for admin
+#   - Order logging to orders.txt
+#   - Billing receipt after every order
+#   - Persistent profit saved in profit.txt
+#   - Better input validation
+#   - Cleaner console UI
 #
 # HOW CLASSES INTERACT:
-# +-----------+   asks for drink   +-----------+
-# |   Menu    | -----------------> | MenuItem  |
-# +-----------+                    +-----------+
-#       |                                |
-#       |  selected drink               | ingredients/cost
-#       v                                v
-# +-----------+  checks resources  +--------------+
-# |CoffeeMaker| <------------------| MoneyMachine |
-# +-----------+                    +--------------+
-#       |                                |
-#       | makes coffee                  | processes payment
-#       v                                v
-#     USER  <---------- serves -------- USER
 #
-# ============================================================
+#   MenuItem  <-- holds recipe (ingredients + price)
+#       |
+#   Menu      <-- stores all MenuItems, shows menu, finds drink
+#       |
+#   CoffeeMaker <-- checks resources, refills, makes coffee
+#       |
+#   MoneyMachine <-- takes coins, verifies payment, gives change
+#       |            saves/loads profit from profit.txt
+#   OrderLogger  <-- logs orders to orders.txt, prints receipt
+#       |
+#   main()    <-- connects everything, runs the machine loop
+#
+# ================================================================
+
+import os
+from datetime import datetime
 
 
-# ─────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────
 # CLASS 1: MenuItem
-# Represents a single drink item on the menu.
-# Think of it as a "recipe card" for each coffee.
-# ─────────────────────────────────────────────────────────────
+# A single drink "recipe card" — stores name, ingredients, price.
+# ────────────────────────────────────────────────────────────────
 class MenuItem:
     """
-    Stores information about one coffee drink.
-    Each drink has a name, ingredients needed, and price.
+    Represents one drink item on the menu.
+    Each drink has a name, ingredients needed, and a price.
     """
 
     def __init__(self, name, water, milk, coffee, cost):
         """
-        Constructor -- runs automatically when we create a MenuItem object.
+        Constructor — called automatically when a MenuItem is created.
 
         Parameters:
-            name   (str)   : Name of the drink (e.g., "espresso")
+            name   (str)   : Drink name (e.g., "latte")
             water  (int)   : Water needed in ml
             milk   (int)   : Milk needed in ml
             coffee (int)   : Coffee beans needed in grams
-            cost   (float) : Price of the drink in rupees
+            cost   (float) : Price in rupees
         """
-        self.name = name                      # Drink name
-        self.ingredients = {                  # Dictionary of ingredients
+        self.name = name
+        self.ingredients = {
             "water":  water,
             "milk":   milk,
-            "coffee": coffee
+            "coffee": coffee,
         }
-        self.cost = cost                      # Price in rupees
+        self.cost = cost
 
     def __str__(self):
-        """Returns a readable string when we print a MenuItem object."""
-        return (f"{self.name.capitalize()} | "
-                f"Water: {self.ingredients['water']}ml | "
-                f"Milk: {self.ingredients['milk']}ml | "
-                f"Coffee: {self.ingredients['coffee']}g | "
-                f"Cost: Rs.{self.cost:.2f}")
+        """Readable string representation of a drink."""
+        return (f"{self.name.capitalize():<14} | "
+                f"Water: {self.ingredients['water']:>4}ml | "
+                f"Milk: {self.ingredients['milk']:>4}ml | "
+                f"Coffee: {self.ingredients['coffee']:>3}g | "
+                f"Rs.{self.cost:.2f}")
 
 
-# ─────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────
 # CLASS 2: Menu
-# Stores all available drinks and helps find a drink by name.
-# Think of it as the "menu board" at a coffee shop.
-# ─────────────────────────────────────────────────────────────
+# The full menu board — lists all drinks, finds a drink by name.
+# ────────────────────────────────────────────────────────────────
 class Menu:
     """
-    Manages the list of all available coffee drinks.
-    Provides methods to display the menu and find a drink.
+    Manages all available coffee drinks.
+    Provides methods to display the menu and find a drink by name.
+
+    VERSION 2.0: Added Mocha, Black Coffee, Cold Coffee.
     """
 
     def __init__(self):
         """
-        Constructor -- creates MenuItem objects for each drink
-        and stores them in a list.
+        Constructor — creates all MenuItem objects and stores them.
         """
-        # Creating drink objects using the MenuItem class
         self.menu = [
-            MenuItem(name="espresso",   water=50,  milk=0,   coffee=18, cost=30),
-            MenuItem(name="latte",      water=200, milk=150, coffee=24, cost=50),
-            MenuItem(name="cappuccino", water=250, milk=100, coffee=24, cost=60),
+            # Original 3 drinks
+            MenuItem(name="espresso",    water=50,  milk=0,   coffee=18, cost=30),
+            MenuItem(name="latte",       water=200, milk=150, coffee=24, cost=50),
+            MenuItem(name="cappuccino",  water=250, milk=100, coffee=24, cost=60),
+            # New 3 drinks added in Version 2.0
+            MenuItem(name="mocha",       water=200, milk=50,  coffee=30, cost=70),
+            MenuItem(name="black coffee",water=200, milk=0,   coffee=18, cost=25),
+            MenuItem(name="cold coffee", water=100, milk=200, coffee=24, cost=65),
         ]
 
     def get_items(self):
         """
-        Returns a string of all drink names, separated by slashes.
-        Example: "espresso/latte/cappuccino"
+        Returns all drink names as a slash-separated string.
+        Example: "espresso/latte/cappuccino/mocha/black coffee/cold coffee"
         """
-        options = ""
-        for item in self.menu:
-            options += f"{item.name}/"
-        return options.rstrip("/")   # Remove trailing slash
+        return "/".join(item.name for item in self.menu)
 
     def find_drink(self, order_name):
         """
-        Searches the menu for the drink the user ordered.
+        Finds a drink on the menu by name (case-insensitive).
 
         Parameters:
-            order_name (str): The name of the drink the user typed.
+            order_name (str): The name the user typed.
 
         Returns:
-            MenuItem object if found, else None.
+            MenuItem if found, else None.
         """
+        cleaned = order_name.lower().strip()
         for item in self.menu:
-            if item.name == order_name.lower().strip():
+            if item.name == cleaned:
                 return item
-        print(f"\n  [!] '{order_name}' is not on the menu. Please try again.\n")
         return None
 
     def show_menu(self):
-        """Prints a nicely formatted menu to the screen."""
-        print("\n" + "=" * 55)
-        print("         ***  WELCOME TO COFFEE MACHINE  ***")
-        print("=" * 55)
-        print(f"  {'Drink':<15} {'Water':>8} {'Milk':>8} {'Coffee':>8} {'Price':>8}")
-        print("-" * 55)
-        for item in self.menu:
-            print(f"  {item.name.capitalize():<15} "
+        """Prints the full menu in a formatted table."""
+        print("\n" + "=" * 65)
+        print("             ***  COFFEE MACHINE PRO  ***")
+        print("=" * 65)
+        print(f"  {'#':<3} {'Drink':<15} {'Water':>7} {'Milk':>7} {'Coffee':>8} {'Price':>8}")
+        print("-" * 65)
+        for i, item in enumerate(self.menu, start=1):
+            print(f"  {i:<3} {item.name.capitalize():<15} "
                   f"{item.ingredients['water']:>5}ml "
-                  f"{item.ingredients['milk']:>6}ml "
+                  f"{item.ingredients['milk']:>5}ml "
                   f"{item.ingredients['coffee']:>5}g "
-                  f"  Rs.{item.cost:.2f}")
-        print("=" * 55)
+                  f"   Rs.{item.cost:.2f}")
+        print("=" * 65)
+        print("  Commands: report | refill | off")
+        print("=" * 65)
 
 
-# ─────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────
 # CLASS 3: CoffeeMaker
-# Manages the machine's resources (water, milk, coffee).
-# Think of it as the "engine" of the coffee machine.
-# ─────────────────────────────────────────────────────────────
+# The machine engine — manages resources, refills, makes coffee.
+# ────────────────────────────────────────────────────────────────
 class CoffeeMaker:
     """
-    Handles the internal resources of the coffee machine.
-    Checks if there are enough ingredients and makes the coffee.
+    Handles the coffee machine's internal resources.
+    Checks ingredients, refills stock, and prepares drinks.
+
+    VERSION 2.0: Added refill() method.
     """
+
+    # Maximum capacity of the machine
+    MAX_WATER  = 1000   # ml
+    MAX_MILK   = 800    # ml
+    MAX_COFFEE = 500    # g
 
     def __init__(self):
         """
-        Constructor -- sets the starting amount of resources
-        available in the machine.
+        Constructor — sets starting resource levels.
         """
         self.resources = {
-            "water":  300,    # 300 ml of water
-            "milk":   200,    # 200 ml of milk
-            "coffee": 100,    # 100 grams of coffee beans
+            "water":  300,
+            "milk":   200,
+            "coffee": 100,
         }
 
     def report(self):
-        """Prints the current resource levels in the machine."""
-        print("\n" + "-" * 40)
-        print("  [REPORT]  MACHINE RESOURCES")
-        print("-" * 40)
-        print(f"  Water  : {self.resources['water']} ml")
-        print(f"  Milk   : {self.resources['milk']} ml")
-        print(f"  Coffee : {self.resources['coffee']} g")
+        """Prints current resource levels with capacity percentages."""
+        water_pct  = int((self.resources["water"]  / self.MAX_WATER)  * 100)
+        milk_pct   = int((self.resources["milk"]   / self.MAX_MILK)   * 100)
+        coffee_pct = int((self.resources["coffee"] / self.MAX_COFFEE) * 100)
+
+        print("\n" + "-" * 50)
+        print("  [MACHINE RESOURCES]")
+        print("-" * 50)
+        print(f"  Water  : {self.resources['water']:>5} ml   ({water_pct}% full)")
+        print(f"  Milk   : {self.resources['milk']:>5} ml   ({milk_pct}% full)")
+        print(f"  Coffee : {self.resources['coffee']:>5} g    ({coffee_pct}% full)")
 
     def is_resource_sufficient(self, drink):
         """
-        Checks if the machine has enough ingredients for the chosen drink.
+        Checks if the machine has enough ingredients for the drink.
 
         Parameters:
-            drink (MenuItem): The drink the user wants to make.
+            drink (MenuItem): The drink to check.
 
         Returns:
-            True  -- if all resources are available.
-            False -- if any resource is insufficient.
+            True if all ingredients are available, False otherwise.
         """
-        for item in drink.ingredients:
-            if drink.ingredients[item] > self.resources[item]:
-                print(f"\n  [!] Sorry! Not enough {item} to make {drink.name}.")
+        for ingredient, amount_needed in drink.ingredients.items():
+            if amount_needed > self.resources[ingredient]:
+                print(f"\n  [!] Sorry! Not enough {ingredient} "
+                      f"to make {drink.name.capitalize()}.")
+                print(f"      Need {amount_needed} {self._unit(ingredient)}, "
+                      f"have {self.resources[ingredient]} {self._unit(ingredient)}.")
                 print("      Please refill the machine or choose another drink.")
                 input("\n  Press Enter to continue...")
                 return False
         return True
 
+    def refill(self):
+        """
+        Allows admin to refill water, milk, and coffee stock.
+        Validates input and caps at maximum capacity.
+
+        VERSION 2.0: New method.
+        """
+        print("\n" + "-" * 50)
+        print("  [REFILL]  Admin Refill Mode")
+        print("-" * 50)
+        print(f"  Current  -> Water: {self.resources['water']}ml | "
+              f"Milk: {self.resources['milk']}ml | "
+              f"Coffee: {self.resources['coffee']}g")
+        print(f"  Maximum  -> Water: {self.MAX_WATER}ml | "
+              f"Milk: {self.MAX_MILK}ml | "
+              f"Coffee: {self.MAX_COFFEE}g")
+        print("-" * 50)
+
+        for ingredient, unit, maximum in [
+            ("water",  "ml", self.MAX_WATER),
+            ("milk",   "ml", self.MAX_MILK),
+            ("coffee", "g",  self.MAX_COFFEE),
+        ]:
+            while True:
+                try:
+                    add = int(input(f"  Add {ingredient} ({unit}): "))
+                    if add < 0:
+                        print("  [!] Please enter a positive number.")
+                    else:
+                        new_val = self.resources[ingredient] + add
+                        if new_val > maximum:
+                            new_val = maximum
+                            print(f"  [!] Capped at maximum ({maximum}{unit}).")
+                        self.resources[ingredient] = new_val
+                        break
+                except ValueError:
+                    print("  [!] Invalid input. Enter a whole number.")
+
+        print("\n  [OK] Machine refilled successfully!")
+        print(f"  New Stock -> Water: {self.resources['water']}ml | "
+              f"Milk: {self.resources['milk']}ml | "
+              f"Coffee: {self.resources['coffee']}g")
+        print("-" * 50)
+        input("\n  Press Enter to continue...")
+
     def make_coffee(self, drink):
         """
-        Deducts the required ingredients from the machine's resources
-        and serves the coffee.
+        Deducts ingredients and prepares the drink.
 
         Parameters:
-            drink (MenuItem): The drink to be prepared.
+            drink (MenuItem): The drink to prepare.
         """
         self.resources["water"]  -= drink.ingredients["water"]
         self.resources["milk"]   -= drink.ingredients["milk"]
         self.resources["coffee"] -= drink.ingredients["coffee"]
-        print(f"\n  [**] Here is your {drink.name.capitalize()}! Enjoy! :)\n")
+
+    def _unit(self, ingredient):
+        """Returns the measurement unit for a given ingredient."""
+        return "g" if ingredient == "coffee" else "ml"
 
 
-# ─────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────
 # CLASS 4: MoneyMachine
-# Handles all payment-related tasks.
-# Think of it as the "cash register" of the coffee machine.
-# ─────────────────────────────────────────────────────────────
+# The cash register — handles coins, payment, change, and profit.
+# VERSION 2.0: Profit is now saved/loaded from profit.txt
+# ────────────────────────────────────────────────────────────────
 class MoneyMachine:
     """
-    Processes coin insertion, verifies payment,
-    calculates change, and tracks total profit.
+    Manages coin input, payment verification, change calculation,
+    and persistent profit tracking via profit.txt.
     """
 
-    # Coin values accepted by the machine (in rupees)
+    PROFIT_FILE = "profit.txt"
+
+    # Coin denominations accepted (in rupees)
     COIN_VALUES = {
         "5 rupee":  5,
         "10 rupee": 10,
@@ -211,175 +284,286 @@ class MoneyMachine:
 
     def __init__(self):
         """
-        Constructor -- sets the initial profit to zero.
+        Constructor — loads profit from profit.txt if it exists.
+        Otherwise starts fresh at Rs.0.
         """
-        self.profit = 0    # Total money earned by the machine
+        self.profit = self._load_profit()
+
+    def _load_profit(self):
+        """
+        Reads saved profit from profit.txt.
+        Returns 0.0 if file doesn't exist or is corrupted.
+        """
+        if os.path.exists(self.PROFIT_FILE):
+            try:
+                with open(self.PROFIT_FILE, "r") as f:
+                    value = float(f.read().strip())
+                    print(f"\n  [INFO] Loaded saved profit: Rs.{value:.2f}")
+                    return value
+            except Exception:
+                return 0.0
+        return 0.0
+
+    def _save_profit(self):
+        """
+        Saves current profit to profit.txt so it persists
+        between program runs.
+        """
+        try:
+            with open(self.PROFIT_FILE, "w") as f:
+                f.write(f"{self.profit:.2f}")
+        except Exception as e:
+            print(f"  [!] Warning: Could not save profit. ({e})")
 
     def report(self):
-        """Prints the total money (profit) collected so far."""
+        """Prints total profit collected (loaded + this session)."""
         print(f"  Money  : Rs.{self.profit:.2f}  (Total Collected)")
-        print("-" * 40)   # Close the report box properly
+        print("-" * 50)
 
-    def process_coins(self):
+    def process_coins(self, drink_name):
         """
-        Asks the user how many of each coin they are inserting.
-        Calculates the total amount inserted.
+        Asks the user to insert coins and calculates total amount.
+
+        Parameters:
+            drink_name (str): Name of the drink (shown in prompt).
 
         Returns:
-            float: Total amount of money inserted by the user.
+            float: Total money inserted.
         """
-        print("\n  [COINS]  INSERT YOUR COINS")
-        print("  " + "-" * 30)
+        print(f"\n  [COINS]  Paying for {drink_name.capitalize()}")
+        print("  " + "-" * 35)
         total = 0
         for coin, value in self.COIN_VALUES.items():
             while True:
                 try:
                     count = int(input(f"  How many {coin} coins? : "))
                     if count < 0:
-                        print("  [!] Please enter 0 or a positive number.")
+                        print("  [!] Cannot be negative. Enter 0 or more.")
                     else:
                         total += count * value
                         break
                 except ValueError:
-                    print("  [!] Invalid input! Please enter a whole number.")
+                    print("  [!] Invalid input. Please enter a whole number.")
         return total
 
     def is_transaction_successful(self, money_received, drink_cost):
         """
-        Checks if the user paid enough for the drink.
-        Gives back change if they overpaid.
+        Verifies if payment is sufficient, calculates change.
 
         Parameters:
-            money_received (float): Total coins inserted.
-            drink_cost     (float): Price of the selected drink.
+            money_received (float): Amount inserted by user.
+            drink_cost     (float): Price of the drink.
 
         Returns:
-            True  -- if payment is sufficient.
-            False -- if payment is insufficient.
+            (bool, float): (success, change_given)
         """
         if money_received >= drink_cost:
             change = round(money_received - drink_cost, 2)
-            if change > 0:
-                print(f"\n  [OK] Payment accepted! Your change is Rs.{change:.2f}")
-            else:
-                print(f"\n  [OK] Payment accepted! Exact amount received.")
-            self.profit += drink_cost   # Add drink cost to machine profit
-            return True
+            self.profit += drink_cost
+            self._save_profit()    # Save immediately after each sale
+            return True, change
         else:
             shortage = round(drink_cost - money_received, 2)
-            print(f"\n  [!] Not enough money! You need Rs.{shortage:.2f} more.")
-            print("      Refunding your money. Please try again.")
-            input("\n  Press Enter to continue...")  # Pause so user can read the message
-            return False
+            print(f"\n  [!] Insufficient payment!")
+            print(f"      Required : Rs.{drink_cost:.2f}")
+            print(f"      Received : Rs.{money_received:.2f}")
+            print(f"      Short by : Rs.{shortage:.2f}")
+            print("      Refunding your coins. Please try again.")
+            input("\n  Press Enter to continue...")
+            return False, 0
 
 
-# ─────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────
+# CLASS 5: OrderLogger  (NEW in Version 2.0)
+# Logs every order to orders.txt and prints a billing receipt.
+# ────────────────────────────────────────────────────────────────
+class OrderLogger:
+    """
+    Handles order tracking and receipt printing.
+
+    - Logs every completed order to orders.txt with timestamp.
+    - Prints a detailed billing receipt on screen after each order.
+
+    VERSION 2.0: New class.
+    """
+
+    LOG_FILE = "orders.txt"
+
+    def log_order(self, drink, paid, change):
+        """
+        Appends one order record to orders.txt.
+
+        Parameters:
+            drink  (MenuItem): The drink that was ordered.
+            paid   (float)   : Total coins inserted.
+            change (float)   : Change returned.
+        """
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        log_line = (
+            f"[{timestamp}]  |  "
+            f"{drink.name.capitalize():<14}  |  "
+            f"Cost: Rs.{drink.cost:<7.2f}  |  "
+            f"Paid: Rs.{paid:<7.2f}  |  "
+            f"Change: Rs.{change:.2f}\n"
+        )
+        try:
+            with open(self.LOG_FILE, "a") as f:
+                f.write(log_line)
+        except Exception as e:
+            print(f"  [!] Warning: Could not log order. ({e})")
+
+    def print_receipt(self, drink, paid, change):
+        """
+        Prints a formatted billing receipt on screen.
+
+        Parameters:
+            drink  (MenuItem): The drink ordered.
+            paid   (float)   : Amount paid.
+            change (float)   : Change returned.
+        """
+        timestamp = datetime.now().strftime("%d-%m-%Y  %I:%M %p")
+        print("\n" + "=" * 50)
+        print("            BILLING RECEIPT")
+        print("=" * 50)
+        print(f"  Date / Time  : {timestamp}")
+        print(f"  Drink        : {drink.name.capitalize()}")
+        print(f"  Cost         : Rs.{drink.cost:.2f}")
+        print(f"  Amount Paid  : Rs.{paid:.2f}")
+        if change > 0:
+            print(f"  Change       : Rs.{change:.2f}")
+        else:
+            print(f"  Change       : No change (Exact payment)")
+        print("-" * 50)
+        print("  Status       : Payment Successful")
+        print("=" * 50)
+        print("       Thank you! Enjoy your coffee!")
+        print("=" * 50)
+
+
+# ────────────────────────────────────────────────────────────────
 # MAIN PROGRAM
-# This is where all classes come together and the machine runs.
-# ─────────────────────────────────────────────────────────────
+# Connects all classes and runs the coffee machine loop.
+# ────────────────────────────────────────────────────────────────
 def main():
     """
-    Main function that runs the coffee machine loop.
+    Main function — runs the coffee machine.
 
-    Program Flow:
-    1.  Show the menu
-    2.  Get user's drink choice
-    3.  Handle special commands (report / off)
-    4.  Check if ingredients are available
-    5.  Process coins / payment
-    6.  Verify payment
-    7.  Make and serve coffee
-    8.  Repeat until user types 'off'
+    Program Flow (Version 2.0):
+    1.  Load saved profit from profit.txt
+    2.  Show the full drink menu (6 drinks)
+    3.  Get user input
+    4.  Handle: report | refill | off | drink name
+    5.  Check resources
+    6.  Process coins
+    7.  Verify payment
+    8.  Make coffee
+    9.  Print billing receipt
+    10. Log order to orders.txt
+    11. Repeat until 'off'
     """
 
-    # ── Create objects from our classes ──────────────────────
-    menu          = Menu()           # The drinks menu
-    coffee_maker  = CoffeeMaker()    # The machine that makes coffee
-    money_machine = MoneyMachine()   # The payment system
+    # ── Create all objects ───────────────────────────────────
+    menu          = Menu()          # The menu board
+    coffee_maker  = CoffeeMaker()   # The machine engine
+    money_machine = MoneyMachine()  # The cash register
+    order_logger  = OrderLogger()   # The order tracker
     # ─────────────────────────────────────────────────────────
 
-    is_on = True   # Controls the machine on/off state
+    is_on = True
 
     while is_on:
 
-        # STEP 1: Show menu and get user's choice
+        # STEP 1: Display the menu
         menu.show_menu()
         options = menu.get_items()
-        choice = input(f"\n  What would you like? ({options}) : ").lower().strip()
 
-        # STEP 2: Handle special commands
+        # STEP 2: Get user's choice with validation
+        raw = input(f"\n  Your choice : ").strip()
+
+        # STEP 3: Handle empty input
+        if not raw:
+            print("\n  [!] No input received. Please type a drink name or command.")
+            input("  Press Enter to continue...")
+            continue
+
+        choice = raw.lower()
+
+        # STEP 4: Handle special commands
         if choice == "off":
-            # Turn off the machine
-            print("\n  [OFF] Turning off the coffee machine. Goodbye!\n")
+            print("\n" + "=" * 50)
+            print("  [OFF] Coffee Machine shutting down.")
+            print(f"  Total Earnings Today: Rs.{money_machine.profit:.2f}")
+            print("  Goodbye! Have a great day!")
+            print("=" * 50 + "\n")
             is_on = False
 
         elif choice == "report":
-            # Show resource and money report (both inside the same box)
             coffee_maker.report()
             money_machine.report()
-            # Note: money_machine.report() closes the box with the bottom dashes
+
+        elif choice == "refill":
+            coffee_maker.refill()
 
         else:
-            # STEP 3: Find the drink on the menu
+            # STEP 5: Find the drink
             drink = menu.find_drink(choice)
 
-            if drink is not None:
-                # STEP 4: Check if machine has enough ingredients
-                if coffee_maker.is_resource_sufficient(drink):
-                    # STEP 5: Process coins from the user
-                    payment = money_machine.process_coins()
+            if drink is None:
+                print(f"\n  [!] '{raw}' is not on the menu.")
+                print(f"  Available: {options}")
+                input("  Press Enter to continue...")
+                continue
 
-                    # STEP 6: Verify if payment is enough
-                    if money_machine.is_transaction_successful(payment, drink.cost):
-                        # STEP 7: Make and serve the coffee
-                        coffee_maker.make_coffee(drink)
+            # STEP 6: Check if machine has enough ingredients
+            if not coffee_maker.is_resource_sufficient(drink):
+                continue
+
+            # STEP 7: Process coins
+            paid = money_machine.process_coins(drink.name)
+
+            # STEP 8: Verify payment
+            success, change = money_machine.is_transaction_successful(paid, drink.cost)
+
+            if success:
+                # STEP 9: Make the coffee
+                coffee_maker.make_coffee(drink)
+
+                # STEP 10: Print receipt
+                order_logger.print_receipt(drink, paid, change)
+
+                # STEP 11: Log the order
+                order_logger.log_order(drink, paid, change)
+
+                input("\n  Press Enter to continue...")
 
 
-# ─────────────────────────────────────────────────────────────
-# Entry Point -- Python runs this block first
-# ─────────────────────────────────────────────────────────────
+# ────────────────────────────────────────────────────────────────
+# Entry Point
+# ────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     main()
 
 
-# ============================================================
-# SAMPLE OUTPUT:
-# ============================================================
+# ================================================================
+# FILE GUIDE (New in Version 2.0):
+# ================================================================
 #
-#  =======================================================
-#           ***  WELCOME TO COFFEE MACHINE  ***
-#  =======================================================
-#    Drink            Water     Milk   Coffee    Price
-#  -------------------------------------------------------
-#    Espresso          50ml      0ml    18g    Rs.30.00
-#    Latte            200ml    150ml   24g    Rs.50.00
-#    Cappuccino       250ml    100ml   24g    Rs.60.00
-#  =======================================================
+#  coffee_machine_project.py  -- Main program (all classes here)
+#  profit.txt                 -- Auto-created: saves total profit
+#  orders.txt                 -- Auto-created: logs every order
 #
-#  What would you like? (espresso/latte/cappuccino) : latte
+# ================================================================
+# SAMPLE orders.txt content:
+# ================================================================
 #
-#  [COINS]  INSERT YOUR COINS
-#  ------------------------------
-#  How many 5 rupee coins?  : 0
-#  How many 10 rupee coins? : 5
-#  How many 20 rupee coins? : 0
+#  [2026-05-06 15:30:00]  |  Latte           |  Cost: Rs.50.00   |  Paid: Rs.60.00   |  Change: Rs.10.00
+#  [2026-05-06 15:35:22]  |  Espresso        |  Cost: Rs.30.00   |  Paid: Rs.30.00   |  Change: Rs.0.00
+#  [2026-05-06 15:40:10]  |  Mocha           |  Cost: Rs.70.00   |  Paid: Rs.80.00   |  Change: Rs.10.00
 #
-#  [OK] Payment accepted! Exact amount received.
+# ================================================================
+# SAMPLE profit.txt content:
+# ================================================================
 #
-#  [**] Here is your Latte! Enjoy! :)
+#  150.00
 #
-#  What would you like? (espresso/latte/cappuccino) : report
-#
-#  ----------------------------------------
-#   [REPORT]  MACHINE RESOURCES
-#  ----------------------------------------
-#   Water  : 100 ml
-#   Milk   : 50 ml
-#   Coffee : 76 g
-#  ----------------------------------------
-#   Money  : Rs.50.00  (Total Collected)
-#
-#  What would you like? (espresso/latte/cappuccino) : off
-#  [OFF] Turning off the coffee machine. Goodbye!
-#
-# ============================================================
+# ================================================================
